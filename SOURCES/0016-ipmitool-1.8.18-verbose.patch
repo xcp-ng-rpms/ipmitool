@@ -1,0 +1,110 @@
+diff -urNp old/lib/ipmi_picmg.c new/lib/ipmi_picmg.c
+--- old/lib/ipmi_picmg.c	2016-07-31 07:29:49.000000000 +0200
++++ new/lib/ipmi_picmg.c	2017-10-03 15:38:48.711790645 +0200
+@@ -2353,28 +2353,28 @@ picmg_discover(struct ipmi_intf *intf) {
+ 	req.msg.data_len = 1;
+ 	msg_data = 0;
+ 
+-	lprintf(LOG_INFO, "Running Get PICMG Properties my_addr %#x, transit %#x, target %#x",
++	lprintf(LOG_DEBUG, "Running Get PICMG Properties my_addr %#x, transit %#x, target %#x",
+ 		intf->my_addr, intf->transit_addr, intf->target_addr);
+ 	rsp = intf->sendrecv(intf, &req);
+ 	if (rsp == NULL) {
+-	    lprintf(LOG_INFO,"No response from Get PICMG Properties");
++	    lprintf(LOG_DEBUG,"No response from Get PICMG Properties");
+ 	} else if (rsp->ccode != 0) {
+-	    lprintf(LOG_INFO,"Error response %#x from Get PICMG Properities",
++	    lprintf(LOG_DEBUG,"Error response %#x from Get PICMG Properities",
+ 		    rsp->ccode);
+ 	} else if (rsp->data_len < 4) {
+-	    lprintf(LOG_INFO,"Invalid Get PICMG Properties response length %d",
++	    lprintf(LOG_DEBUG,"Invalid Get PICMG Properties response length %d",
+ 		    rsp->data_len);
+ 	} else if (rsp->data[0] != 0) {
+-	    lprintf(LOG_INFO,"Invalid Get PICMG Properties group extension %#x",
++	    lprintf(LOG_DEBUG,"Invalid Get PICMG Properties group extension %#x",
+ 		    rsp->data[0]);
+ 	} else if ((rsp->data[1] & 0x0F) != PICMG_EXTENSION_ATCA_MAJOR_VERSION
+ 		&& (rsp->data[1] & 0x0F) != PICMG_EXTENSION_AMC0_MAJOR_VERSION
+ 		&& (rsp->data[1] & 0x0F) != PICMG_EXTENSION_UTCA_MAJOR_VERSION) {
+-	    lprintf(LOG_INFO,"Unknown PICMG Extension Version %d.%d",
++	    lprintf(LOG_DEBUG,"Unknown PICMG Extension Version %d.%d",
+ 		    (rsp->data[1] & 0x0F), (rsp->data[1] >> 4));
+ 	} else {
+ 	    picmg_avail = 1;
+-	    lprintf(LOG_INFO, "Discovered PICMG Extension Version %d.%d",
++	    lprintf(LOG_DEBUG, "Discovered PICMG Extension Version %d.%d",
+ 		    (rsp->data[1] & 0x0f), (rsp->data[1] >> 4));
+ 	}
+ 
+diff -urNp old/lib/ipmi_vita.c new/lib/ipmi_vita.c
+--- old/lib/ipmi_vita.c	2018-01-05 10:29:51.290694252 +0100
++++ new/lib/ipmi_vita.c	2018-01-05 12:09:56.480413217 +0100
+@@ -184,7 +184,7 @@ vita_discover(struct ipmi_intf *intf)
+ 
+ 	msg_data = GROUP_EXT_VITA;
+ 
+-	lprintf(LOG_INFO, "Running Get VSO Capabilities my_addr %#x, "
++	lprintf(LOG_DEBUG, "Running Get VSO Capabilities my_addr %#x, "
+ 		"transit %#x, target %#x",
+ 		intf->my_addr, intf->transit_addr, intf->target_addr);
+ 
+@@ -193,29 +193,29 @@ vita_discover(struct ipmi_intf *intf)
+ 	if (rsp == NULL) {
+ 		lprintf(LOG_ERR, "No valid response received");
+ 	} else if (rsp->ccode == 0xC1) {
+-		lprintf(LOG_INFO, "Invalid completion code received: %s",
++		lprintf(LOG_DEBUG, "Invalid completion code received: %s",
+ 			val2str(rsp->ccode, completion_code_vals));
+ 	} else if (rsp->ccode == 0xCC) {
+-		lprintf(LOG_INFO, "Invalid data field received: %s",
++		lprintf(LOG_DEBUG, "Invalid data field received: %s",
+ 			val2str(rsp->ccode, completion_code_vals));
+ 	} else if (rsp->ccode != 0) {
+-		lprintf(LOG_INFO, "Invalid completion code received: %s",
++		lprintf(LOG_DEBUG, "Invalid completion code received: %s",
+ 			val2str(rsp->ccode, completion_code_vals));
+ 	} else if (rsp->data_len < 5) {
+-		lprintf(LOG_INFO, "Invalid response length %d",
++		lprintf(LOG_DEBUG, "Invalid response length %d",
+ 			rsp->data_len);
+ 	} else if (rsp->data[0] != GROUP_EXT_VITA) {
+-		lprintf(LOG_INFO, "Invalid group extension %#x",
++		lprintf(LOG_DEBUG, "Invalid group extension %#x",
+ 			rsp->data[0]);
+ 	} else if ((rsp->data[3] & 0x03) != 0) {
+-		lprintf(LOG_INFO, "Unknown VSO Standard %d",
++		lprintf(LOG_DEBUG, "Unknown VSO Standard %d",
+ 			(rsp->data[3] & 0x03));
+ 	} else if ((rsp->data[4] & 0x0F) != 1) {
+-		lprintf(LOG_INFO, "Unknown VSO Specification Revision %d.%d",
++		lprintf(LOG_DEBUG, "Unknown VSO Specification Revision %d.%d",
+ 			(rsp->data[4] & 0x0F), (rsp->data[4] >> 4));
+ 	} else {
+ 		vita_avail = 1;
+-		lprintf(LOG_INFO, "Discovered VITA 46.11 Revision %d.%d",
++		lprintf(LOG_DEBUG, "Discovered VITA 46.11 Revision %d.%d",
+ 			(rsp->data[4] & 0x0F), (rsp->data[4] >> 4));
+ 	}
+ 
+diff -urNp old/lib/ipmi_main.c new/lib/ipmi_main.c
+--- old/lib/ipmi_main.c	2018-01-08 15:31:37.159786062 +0100
++++ new/lib/ipmi_main.c	2018-01-08 15:32:35.960077134 +0100
+@@ -904,7 +904,7 @@ ipmi_main(int argc, char ** argv,
+ 	} else if (!ipmi_oem_active(ipmi_main_intf, "i82571spt")) {
+ 		lprintf(LOG_DEBUG, "Acquire IPMB address");
+ 		addr = ipmi_acquire_ipmb_address(ipmi_main_intf);
+-		lprintf(LOG_INFO,  "Discovered IPMB address 0x%x", addr);
++		lprintf(LOG_DEBUG,  "Discovered IPMB address 0x%x", addr);
+ 	}
+ 
+ 	/*
+@@ -956,7 +956,7 @@ ipmi_main(int argc, char ** argv,
+ 					   ipmi_main_intf->transit_addr,
+ 					   ipmi_main_intf->transit_channel);
+ 		if (ipmi_main_intf->target_ipmb_addr) {
+-			lprintf(LOG_INFO, "Discovered Target IPMB-0 address %#x",
++			lprintf(LOG_DEBUG, "Discovered Target IPMB-0 address %#x",
+ 					   ipmi_main_intf->target_ipmb_addr);
+ 		}
+ 	}

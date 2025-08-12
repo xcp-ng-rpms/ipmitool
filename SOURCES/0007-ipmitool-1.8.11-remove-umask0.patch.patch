@@ -1,0 +1,28 @@
+From 4ca58a30ef718975232231f1a5044554718b3404 Mon Sep 17 00:00:00 2001
+From: Boris Ranto <branto@redhat.com>
+Date: Fri, 6 Nov 2015 12:58:31 +0100
+Subject: [PATCH 07/11] ipmitool-1.8.11-remove-umask0.patch
+
+CVE-2011-4339 OpenIPMI: IPMI event daemon creates PID file with world
+writeable permissions
+
+Backported by: jsafrane
+---
+ lib/helper.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/lib/helper.c b/lib/helper.c
+index d934fc0..998b2e6 100644
+--- a/lib/helper.c
++++ b/lib/helper.c
+@@ -658,7 +658,6 @@ ipmi_start_daemon(struct ipmi_intf *intf)
+ #endif
+ 
+ 	chdir("/");
+-	umask(0);
+ 
+ 	for (fd=0; fd<64; fd++) {
+ 		if (fd != intf->fd)
+-- 
+2.1.0
+

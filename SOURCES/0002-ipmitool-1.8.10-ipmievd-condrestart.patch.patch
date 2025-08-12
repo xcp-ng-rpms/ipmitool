@@ -1,0 +1,76 @@
+From a82448d0a53be621e9a1f5f7dff44e4e481e174c Mon Sep 17 00:00:00 2001
+From: Boris Ranto <branto@redhat.com>
+Date: Fri, 6 Nov 2015 12:12:29 +0100
+Subject: [PATCH 02/11] ipmitool-1.8.10-ipmievd-condrestart.patch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+532188 -  ipmievd init script's condrestart doesn't work
+Author: Ville Skyttä (ville.skytta@iki.fi)
+Sent upstream as
+https://sourceforge.net/tracker/?func=detail&aid=2889888&group_id=95200&atid=610552
+
+Initscipt output tuning by Jan Safranek
+
+Backported by: dgregor jsafrane
+---
+ contrib/ipmievd.init.redhat | 18 ++++++++++++------
+ 1 file changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/contrib/ipmievd.init.redhat b/contrib/ipmievd.init.redhat
+index 7cf9d24..71b90b9 100755
+--- a/contrib/ipmievd.init.redhat
++++ b/contrib/ipmievd.init.redhat
+@@ -44,24 +44,31 @@ test -r $IPMIEVD_CONFIG || { echo "$IPMIEVD_CONFIG does not exist";
+ . /etc/init.d/functions
+ 
+ start() {
+-	echo "Starting ipmievd:"
++	echo -n "Starting ipmievd:"
+ 	if [ -f /var/lock/subsys/ipmievd ]; then
+ 		return 0
+ 	fi
+ 	daemon $IPMIEVD_BIN $IPMIEVD_OPTIONS
+ 	ret=$?
+ 	[ $ret -eq 0 ] && touch /var/lock/subsys/ipmievd
++	echo
+ 	return $ret
+ }	
+ 
+ stop() {
+-	echo "Shutting down ipmievd:"
++	echo -n "Shutting down ipmievd:"
+ 	killproc $IPMIEVD_BIN
+ 	ret=$?
+ 	[ $ret -eq 0 ] && rm -f /var/lock/subsys/ipmievd
++	echo
+ 	return $ret
+ }
+ 
++restart() {
++	stop
++	start
++}
++
+ case "$1" in
+     start)
+ 	start
+@@ -72,11 +79,10 @@ case "$1" in
+     status)
+ 	status $IPMIEVD_BIN
+ 	;;
+-    restart|reload)
+-    	stop
+-	start
++    restart|reload|force-reload)
++	restart
+ 	;;
+-    condrestart)
++    try-restart|condrestart)
+ 	[ -f /var/lock/subsys/ipmievd ] && restart || :
+ 	;;
+     *)
+-- 
+2.1.0
+
