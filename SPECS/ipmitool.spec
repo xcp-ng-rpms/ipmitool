@@ -1,41 +1,45 @@
-%global _hardened_build 1
+%global       gitname     IPMITOOL
+%global       gitversion  1_8_19
 
 Name:         ipmitool
 Summary:      Utility for IPMI control
-Version:      1.8.18
-Release:      7%{?dist}
-License:      BSD
-Group:        System Environment/Base
+Version:      1.8.19
+Release:      11%{?dist}
+License:      BSD-3-Clause-Sun
 URL:          http://ipmitool.sourceforge.net/
-Source0:      http://downloads.sourceforge.net/project/%{name}/%{name}/%{version}/%{name}-%{version}.tar.bz2
+Source0:      https://github.com/%{name}/%{name}/archive/%{gitname}_%{gitversion}/%{name}-%{version}.tar.gz
 Source1:      openipmi-ipmievd.sysconf
 Source2:      ipmievd.service
 Source3:      exchange-bmc-os-info.service
 Source4:      exchange-bmc-os-info.sysconf
 Source5:      set-bmc-url.sh
 Source6:      exchange-bmc-os-info
+# https://www.iana.org/assignments/enterprise-numbers.txt
+Source7:      enterprise-numbers
+
+# https://github.com/ipmitool/ipmitool/issues/170
+Patch3:       ipmitool-1.8.19-set-kg-key.patch
+Patch4:       0004-slowswid.patch
+Patch5:       0005-sensor-id-length.patch
+Patch7:       0007-check-input.patch
+# https://github.com/ipmitool/ipmitool/issues/199
+# https://github.com/ipmitool/ipmitool/pull/214 - approved but not merged
+Patch14:      0014-lanplus-cipher-retry.patch
+
+# Debian patches, never applied upstream
+# https://bugs.launchpad.net/ubuntu/+source/ipmitool/+bug/633054
+# https://sourceforge.net/p/ipmitool/mailman/message/24405281/
+Patch100:     0100-fix_buf_overflow.patch
+# https://sourceforge.net/p/ipmitool/bugs/490/
+Patch105:     0105-sensor_reading.patch
 
 BuildRequires: openssl-devel readline-devel ncurses-devel
-BuildRequires: systemd-units
+%{?systemd_requires}
+BuildRequires: systemd
 # bootstrap
 BuildRequires: automake autoconf libtool
-Requires:OpenIPMI-modalias
-Requires(post): systemd-sysv
-Requires(post): systemd-units
-Requires(preun): systemd-units
-Requires(postun): systemd-units
 Obsoletes: OpenIPMI-tools < 2.0.14-3
 Provides: OpenIPMI-tools = 2.0.14-3
-
-Patch1:  0001-ipmitool-1.8.10-ipmievd-init.patch.patch
-Patch2:  0002-ipmitool-1.8.10-ipmievd-condrestart.patch.patch
-Patch4:  0004-ipmitool-1.8.11-set-kg-key.patch.patch
-Patch7:  0007-ipmitool-1.8.11-remove-umask0.patch.patch
-Patch9:  0009-ipmitool-1.8.11-bz1126333-slowswid.patch.patch
-Patch10: 0010-ipmitool-1.8.11-bz878614-overname.patch.patch
-Patch15: 0015-ID-390-Support-for-new-Communication-Interface-USB-M.patch
-Patch16: 0016-ipmitool-1.8.18-verbose.patch
-Patch17: 0017-ipmitool-1.8.18-check-input-values.patch
 
 
 %description
@@ -53,10 +57,20 @@ displaying sensor values, displaying the contents of the System Event
 Log (SEL), printing Field Replaceable Unit (FRU) information, reading and
 setting LAN configuration, and chassis power control.
 
+
+%package -n ipmievd
+Requires: ipmitool
+%{?systemd_requires}
+BuildRequires: systemd
+Summary: IPMI event daemon for sending events to syslog
+%description -n ipmievd
+ipmievd is a daemon which will listen for events from the BMC that are
+being  sent to the SEL and also log those messages to syslog.
+
+
 %package -n bmc-snmp-proxy
 Requires: net-snmp
 Requires: exchange-bmc-os-info
-Requires:OpenIPMI-modalias
 BuildArch: noarch
 Summary: Reconfigure SNMP to include host SNMP agent within BMC
 %description -n bmc-snmp-proxy
@@ -66,13 +80,11 @@ of net-snmp to include redirections to BMC based SNMP.
 
 %package -n exchange-bmc-os-info
 Requires: hostname
-Requires: ipmitool OpenIPMI
-Requires:OpenIPMI-modalias
+Requires: ipmitool
 BuildArch: noarch
-Requires(post): systemd-sysv
-Requires(post): systemd-units
-Requires(preun): systemd-units
-Requires(postun): systemd-units
+%{?systemd_requires}
+BuildRequires: systemd
+BuildRequires: make
 
 Summary: Let OS and BMC exchange info
 
@@ -83,18 +95,7 @@ for the host OS to use.
 
 
 %prep
-
-%setup -q
-
-%patch1 -p1
-%patch2 -p1
-%patch4 -p1
-%patch7 -p1
-%patch9 -p1
-%patch10 -p1
-%patch15 -p1
-%patch16 -p1
-%patch17 -p1
+%autosetup -n %{name}-%{gitname}_%{gitversion} -p1
 
 for f in AUTHORS ChangeLog; do
     iconv -f iso-8859-1 -t utf8 < ${f} > ${f}.utf8
@@ -118,7 +119,8 @@ autoconf
 automake --foreign
 # end: release auto-tools
 
-%configure --disable-dependency-tracking --enable-file-security --disable-intf-free
+install -Dm 644 %{SOURCE7} .
+%configure --disable-dependency-tracking --enable-file-security --disable-intf-free --enable-intf-usb
 make %{?_smp_mflags}
 
 %install
@@ -136,13 +138,13 @@ install -Dm 644 contrib/bmc-snmp-proxy.sysconf %{buildroot}%{_sysconfdir}/syscon
 install -Dm 644 contrib/bmc-snmp-proxy.service %{buildroot}%{_unitdir}/bmc-snmp-proxy.service
 install -Dm 755 contrib/bmc-snmp-proxy         %{buildroot}%{_libexecdir}/bmc-snmp-proxy
 
-%post
+%post -n ipmievd
 %systemd_post ipmievd.service
 
-%preun
+%preun -n ipmievd
 %systemd_preun ipmievd.service
 
-%postun
+%postun -n ipmievd
 %systemd_postun_with_restart ipmievd.service
 
 %post -n exchange-bmc-os-info
@@ -166,13 +168,17 @@ install -Dm 755 contrib/bmc-snmp-proxy         %{buildroot}%{_libexecdir}/bmc-sn
 /bin/systemctl try-restart ipmievd.service >/dev/null 2>&1 || :
 
 %files
-%config(noreplace) %{_sysconfdir}/sysconfig/ipmievd
-%{_unitdir}/ipmievd.service
-%{_bindir}/*
-%{_sbindir}/*
-%{_mandir}/man*/*
+%{_bindir}/ipmitool
+%{_mandir}/man1/ipmitool.1*
 %doc %{_datadir}/doc/ipmitool
 %{_datadir}/ipmitool
+%{_datadir}/misc/enterprise-numbers
+
+%files -n ipmievd
+%config(noreplace) %{_sysconfdir}/sysconfig/ipmievd
+%{_unitdir}/ipmievd.service
+%{_sbindir}/ipmievd
+%{_mandir}/man8/ipmievd.8*
 
 %files -n exchange-bmc-os-info
 %config(noreplace) %{_sysconfdir}/sysconfig/exchange-bmc-os-info
@@ -186,71 +192,165 @@ install -Dm 755 contrib/bmc-snmp-proxy         %{buildroot}%{_libexecdir}/bmc-sn
 %{_libexecdir}/bmc-snmp-proxy
 
 %changelog
-* Tue Feb 06 2018 Josef Ridky <jridky@redhat.com> - 0:1.8.18-7
-- Remove debug prints shown without -v option (#1483163)
+* Thu Jul 24 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-11
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_43_Mass_Rebuild
 
-* Tue Oct 03 2017 Josef Ridky <jridky@redhat.com> - 0:1.8.18-6
-- Hide unrequested verbose output (#1483163)
-- Fix doc for check input values (#1495098)
+* Fri Jan 17 2025 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-10
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_42_Mass_Rebuild
 
-* Mon Apr 10 2017 Josef Ridky <jridky@redhat.com> - 0:1.8.18-5
-- Remove RPMDiff fix file (#1439269) related to #1398658
+* Sat Dec 21 2024 Kevin Fenzi <kevin@scrye.com> - 1.8.19-9
+- Correct license. Fixes rhbz#2333046
 
-* Tue Feb 21 2017 Josef Ridky <jridky@redhat.com> - 0:1.8.18-4
-- Fix RPMDiff issues and rebuild
+* Thu Jul 18 2024 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-8
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_41_Mass_Rebuild
 
-* Thu Feb 16 2017 Josef Ridky <jridky@redhat.com> - 0:1.8.18-3
-- Fix issues with warning: dereferencing type-punned pointer 
-  will break strict-aliasing rules from RPMDiff
+* Mon Feb 12 2024 Pavel Cahyna <pcahyna@redhat.com> - 1.8.19-7
+- Update IANA numbers
+- Apply patch from CentOS Stream, never applied upstream:
+  Disable retry of pre-session "Get cipher suites" command as some
+  BMCs are ignoring it (#1831158)
+- Apply patches from Debian, never applied upstream:
+  - fix tsol buffer overflow,
+    https://sourceforge.net/p/ipmitool/mailman/message/24405281/
+  - fix non-analog sensor readings, https://sourceforge.net/p/ipmitool/bugs/490/
+- Update /var/run to /run in ipmievd.service that systemd warns about (#2100475)
 
-* Mon Feb 13 2017 Josef Ridky <jridky@redhat.com> - 0:1.8.18-2
-- Fix issue in file sources
+* Wed Jan 24 2024 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-6
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_40_Mass_Rebuild
 
-* Thu Feb 02 2017 Josef Ridky <jridky@redhat.com> - 0:1.8.18-1
-- New upstream release 1.8.18 (#1398658)
+* Sat Jan 20 2024 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-5
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_40_Mass_Rebuild
 
-* Tue May 03 2016 Boris Ranto <branto@redhat.com> - 0:1.8.15-7
-- New release (0:1.8.15-7)
-- ID:437 - sel: Fix "sel time set <time>"
-- ID 408 - fix sel list last X listing
+* Thu Jul 20 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-4
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_39_Mass_Rebuild
 
-* Thu Mar 24 2016 Boris Ranto <branto@redhat.com> - 1.8.15-6
-- Fix missing return in ipmi_kontronoem_main() - CID#1261317
+* Wed Jul 12 2023 Josef Ridky <jridky@redhat.com> - 1.8.19-3
+- Migrate to SPDX license
 
-* Fri Feb 19 2016 Boris Ranto <branto@redhat.com> - 1.8.15-5
-- allow to upgrade the latest HPM files using usb options
-- resolves: rhbz#1257316
+* Thu Jan 19 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.19-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_38_Mass_Rebuild
 
-* Thu Feb 18 2016 Boris Ranto <branto@redhat.com> - 1.8.15-4
-- use meaningful generator ID for ipmitool sel
-- resolves: rhbz#1289507
+* Sun Sep 04 2022 Kevin Fenzi <kevin@scrye.com> - 1.8.19-1
+- Update to 1.8.19. Fixes rhbz#2123819
 
-* Thu Feb 18 2016 Boris Ranto <branto@redhat.com> - 1.8.15-3
-- perform a hardened build
-- resolves: rhbz#1092551
+* Thu Jul 21 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-26
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_37_Mass_Rebuild
 
-* Thu Feb 18 2016 Boris Ranto <branto@redhat.com> - 1.8.15-2
-- avoid assert on mismatched session ID
-- resolves: rhbz#1286035
+* Thu Jan 20 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-25
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_36_Mass_Rebuild
 
-* Fri Dec 11 2015 Boris Ranto <branto@redhat.com> - 1.8.15-1
-- rebase to latest stable upstream version
-- resolves: rhbz#1269523
+* Tue Sep 14 2021 Sahana Prasad <sahana@redhat.com> - 1.8.18-24
+- Rebuilt with OpenSSL 3.0.0
 
-* Mon Mar 09 2015 Ales Ledvinka <aledvink@redhat.com> - 1.8.13-8
-- Chassis boot parameter settings support.
+* Thu Jul 22 2021 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-23
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_35_Mass_Rebuild
 
-* Wed Mar 05 2014 Ales Ledvinka <aledvink@redhat.com> - 1.8.13-7
-- Allow setting channel Kg key.
+* Tue Mar 02 2021 Zbigniew Jędrzejewski-Szmek <zbyszek@in.waw.pl> - 1.8.18-22
+- Rebuilt for updated systemd-rpm-macros
+  See https://pagure.io/fesco/issue/2583.
 
-* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 1.8.13-6
-- Mass rebuild 2014-01-24
+* Tue Jan 26 2021 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-21
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_34_Mass_Rebuild
 
-* Mon Jan 20 2014 Ales Ledvinka <aledvink@redhat.com> 1.8.13-5
-- bmc-snmp-proxy upstream bugfixes.
+* Tue Jul 28 2020 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-20
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_33_Mass_Rebuild
 
-* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 1.8.13-4
-- Mass rebuild 2013-12-27
+* Thu Feb 06 2020 Václav Doležal <vdolezal@redhat.com> - 1.8.18-19
+- Backport fix for CVE-2020-5208 (#1798722); for details see
+  https://github.com/ipmitool/ipmitool/security/advisories/GHSA-g659-9qxw-p7cp
+
+* Mon Feb 03 2020 Václav Doležal <vdolezal@redhat.com> - 1.8.18-18
+- Backport patch to autoselect best cipher suite when working over lanplus backend
+- Fixed 'ipmitool pef status/info' not printing final newline
+- Expanded column for sensor name in 'ipmi sdr/sensor' output so longer names are aligned
+
+* Wed Jan 29 2020 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-17
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_32_Mass_Rebuild
+
+* Thu Jan 23 2020 Václav Doležal <vdolezal@redhat.com> - 1.8.18-16
+- Fix FTBFS with GCC 10
+
+* Thu Jul 25 2019 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-15
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_31_Mass_Rebuild
+
+* Sun Feb 17 2019 Igor Gnatenko <ignatenkobrain@fedoraproject.org> - 1.8.18-14
+- Rebuild for readline 8.0
+
+* Fri Feb 01 2019 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-13
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_30_Mass_Rebuild
+
+* Fri Jul 13 2018 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-12
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_29_Mass_Rebuild
+
+* Tue Apr 10 2018 Josef Ridky <jridky@redhat.com> - 1.8.18-11
+- Project moved to github
+
+* Thu Feb 22 2018 Josef Ridky <jridky@redhat.com> - 1.8.18-10
+- Spec clean up
+- Add support to set kg key
+- Fix DDR4 memory issues
+- Increase length of sensor id
+- Enable usb interface by default
+- Fix input options 
+
+* Wed Feb 07 2018 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-9
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild
+
+* Tue Jan 30 2018 Josef Ridky <jridky@redhat.com> - 1.8.18-8
+- remove old systemd dependencies
+
+* Wed Aug 02 2017 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-7
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild
+
+* Wed Jul 26 2017 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-6
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild
+
+* Tue Feb 21 2017 Josef Ridky <jridky@redhat.com> - 1.8.18-5
+- Fix allocation issue
+
+* Tue Feb 21 2017 Josef Ridky <jridky@redhat.com> - 1.8.18-4
+- Add support for OpenSSL-1.1.0 library (#1423743)
+
+* Fri Feb 10 2017 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.18-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild
+
+* Thu Jan 12 2017 Igor Gnatenko <ignatenko@redhat.com> - 1.8.18-2
+- Rebuild for readline 7.x
+
+* Mon Oct 10 2016 Boris Ranto <branto@redhat.com> - 0:1.8.18-1
+- New version (0:1.8.18-1)
+- CVE-2011-4339 OpenIPMI
+
+* Tue May 10 2016 Boris Ranto <branto@redhat.com> - 0:1.8.17-1
+- New version (0:1.8.17-1)
+- CVE-2011-4339 OpenIPMI
+
+* Tue Feb 23 2016 Boris Ranto <branto@redhat.com> - 1.8.16-1
+- Rebase to version 1.8.16
+
+* Thu Feb 04 2016 Fedora Release Engineering <releng@fedoraproject.org> - 1.8.15-6
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_24_Mass_Rebuild
+
+* Tue Nov 24 2015 Boris Ranto <branto@redhat.com> - 1.8.15-5
+- Split ipmievd bits into a separate package
+
+* Wed Jun 17 2015 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 1.8.15-4
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_23_Mass_Rebuild
+
+* Wed Apr 22 2015 Ales Ledvinka <aledvink@redhat.com> 1.8.15-3
+- Remove modalias dependency.
+
+* Thu Mar 19 2015 Ales Ledvinka <aledvink@redhat.com> 1.8.15-1
+- Upstream release 1.8.15
+
+* Sat Aug 16 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 1.8.13-6
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_22_Mass_Rebuild
+
+* Sat Jun 07 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 1.8.13-5
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_Mass_Rebuild
+
+* Tue Apr  8 2014 Ales Ledvinka <aledvink@redhat.com> 1.8.13-4
+- Support for environment variable short options.
 
 * Tue Nov  5 2013 Ales Ledvinka <aledvink@redhat.com> 1.8.13-3
 - Cleanup of dual bridge option.
