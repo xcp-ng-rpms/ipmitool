@@ -4,7 +4,7 @@
 Name:         ipmitool
 Summary:      Utility for IPMI control
 Version:      1.8.19
-Release:      11.1%{?dist}
+Release:      11.2%{?dist}
 License:      BSD-3-Clause-Sun
 URL:          http://ipmitool.sourceforge.net/
 Source0:      https://github.com/%{name}/%{name}/archive/%{gitname}_%{gitversion}/%{name}-%{version}.tar.gz
@@ -32,6 +32,9 @@ Patch14:      0014-lanplus-cipher-retry.patch
 Patch100:     0100-fix_buf_overflow.patch
 # https://sourceforge.net/p/ipmitool/bugs/490/
 Patch105:     0105-sensor_reading.patch
+
+# Upstream fixes
+Patch200:     0001-lan-fix-lan-print-fails-on-unsupported-parameters.patch
 
 BuildRequires: openssl-devel readline-devel ncurses-devel
 %{?systemd_requires}
@@ -192,6 +195,9 @@ install -Dm 755 contrib/bmc-snmp-proxy         %{buildroot}%{_libexecdir}/bmc-sn
 %{_libexecdir}/bmc-snmp-proxy
 
 %changelog
+* Mon Mar 16 2026 Yann Dirson <yann.dirson@vates.tech> - 1.8.19-11.2
+- upstream fix for failure on unsupported IPMI features
+
 * Thu Jan 22 2026 Philippe Coval <philippe.coval@vates.tech> - 1.8.19-11.1
 - Rebuild with openssl-3
 
